@@ -1,6 +1,7 @@
 const canvas = document.getElementById('canvas');
 const sceneList = document.getElementById('scene-list');
 const addSceneBtn = document.getElementById('add-scene');
+const addChoiceButton = document.getElementById('add-choice-button');
 const insertImageBtn = document.getElementById('insert-image');
 const addTextBlockBtn = document.getElementById('add-text-block');
 const inspectorContent = document.getElementById('inspector-content');
@@ -23,6 +24,7 @@ let selectedSceneId = null;
 let looseImages = [];
 let looseTextLayers = [];
 let activeTextLayer = null;
+let activeChoice = null;
 
 const DEFAULT_IMAGE_SIZE = 220;
 
@@ -219,6 +221,26 @@ function createScene() {
   saveState();
 }
 
+function createChoiceButton(scene) {
+  const choiceId = uid();
+  const baseY = 110 + scene.choices.length * 60;
+  scene.choices.push({
+    id: choiceId,
+    text: 'Новий вибір',
+    target: scenes[0]?.id || null,
+    x: 20,
+    y: baseY,
+    width: 170,
+    height: 50,
+    background: '#2563eb',
+    color: '#ffffff',
+    bold: true,
+    fontSize: 16,
+    borderRadius: 12,
+    group: '',
+  });
+}
+
 function renderScene(scene) {
   let el = canvas.querySelector(`[data-id="${scene.id}"]`);
   if (!el) {
@@ -252,8 +274,7 @@ function renderScene(scene) {
   };
 
   el.querySelector('.add-choice').onclick = () => {
-    const choiceId = uid();
-    scene.choices.push({ id: choiceId, text: 'Новий вибір', target: scenes[0]?.id || null });
+    createChoiceButton(scene);
     renderScene(scene);
     refreshConnections();
     saveState();
@@ -359,6 +380,21 @@ function renderLayers(scene, frameEl) {
   });
 }
 
+function ensureChoiceDefaults(choice) {
+  choice.text = choice.text || 'Новий вибір';
+  choice.target = choice.target || null;
+  choice.x = Number.isFinite(choice.x) ? choice.x : 20;
+  choice.y = Number.isFinite(choice.y) ? choice.y : 120 + 50 * choice.order || 120;
+  choice.width = choice.width || 150;
+  choice.height = choice.height || 48;
+  choice.background = choice.background || '#2563eb';
+  choice.color = choice.color || '#ffffff';
+  choice.bold = !!choice.bold;
+  choice.fontSize = choice.fontSize || 16;
+  choice.borderRadius = Number.isFinite(choice.borderRadius) ? choice.borderRadius : 10;
+  choice.group = choice.group || '';
+}
+
 function applyTextStyleToElement(el, layer) {
   el.style.fontFamily = layer.fontFamily || 'Inter';
   el.style.fontSize = `${layer.fontSize || 16}px`;
@@ -377,6 +413,18 @@ function ensureTextDefaults(layer) {
   layer.italic = !!layer.italic;
   layer.underline = !!layer.underline;
   layer.zIndex = layer.zIndex || 1;
+}
+
+function selectChoice(choice, element) {
+  activeChoice = { choice, element };
+  document.querySelectorAll('.choice-button').forEach((btn) => btn.classList.remove('selected'));
+  element.classList.add('selected');
+  renderInspector();
+}
+
+function clearChoiceSelection() {
+  activeChoice = null;
+  document.querySelectorAll('.choice-button').forEach((btn) => btn.classList.remove('selected'));
 }
 
 function selectTextLayer(layer, element, scene) {
@@ -487,6 +535,67 @@ function enableLayerDrag(el, layer) {
     });
 }
 
+function enableChoiceInteraction(wrapper, choice, scene) {
+  interact(wrapper)
+    .draggable({
+      listeners: {
+        move(event) {
+          const x = (parseFloat(wrapper.dataset.x) || choice.x) + event.dx;
+          const y = (parseFloat(wrapper.dataset.y) || choice.y) + event.dy;
+          wrapper.style.transform = `translate(${x}px, ${y}px)`;
+          wrapper.dataset.x = x;
+          wrapper.dataset.y = y;
+          refreshConnections();
+        },
+        end() {
+          const x = parseFloat(wrapper.dataset.x) || choice.x;
+          const y = parseFloat(wrapper.dataset.y) || choice.y;
+          choice.x = x;
+          choice.y = y;
+          wrapper.style.transform = `translate(${choice.x}px, ${choice.y}px)`;
+          wrapper.dataset.x = 0;
+          wrapper.dataset.y = 0;
+          refreshConnections();
+          saveState();
+        },
+      },
+      modifiers: [interact.modifiers.restrictRect({ restriction: 'parent', endOnly: true })],
+    })
+    .resizable({ edges: { left: true, right: true, bottom: true, top: true } })
+    .on('resizemove', (event) => {
+      const { x, y } = event.target.dataset;
+      const newX = (parseFloat(x) || choice.x) + event.deltaRect.left;
+      const newY = (parseFloat(y) || choice.y) + event.deltaRect.top;
+      choice.width = event.rect.width;
+      choice.height = event.rect.height;
+      choice.x = newX;
+      choice.y = newY;
+      Object.assign(event.target.style, {
+        width: `${event.rect.width}px`,
+        height: `${event.rect.height}px`,
+        transform: `translate(${newX}px, ${newY}px)`,
+      });
+      refreshConnections();
+    })
+    .on('resizeend', (event) => {
+      const x = parseFloat(event.target.dataset.x) || 0;
+      const y = parseFloat(event.target.dataset.y) || 0;
+      choice.x = x;
+      choice.y = y;
+      wrapper.style.transform = `translate(${choice.x}px, ${choice.y}px)`;
+      wrapper.dataset.x = 0;
+      wrapper.dataset.y = 0;
+      refreshConnections();
+      saveState();
+    });
+
+  wrapper.addEventListener('click', (e) => {
+    e.stopPropagation();
+    selectScene(scene.id);
+    selectChoice(choice, wrapper.querySelector('.choice-button'));
+  });
+}
+
 function enableFrameInteraction(el, scene) {
   interact(el)
     .draggable({
@@ -573,12 +682,112 @@ function selectScene(id) {
   if (activeTextLayer && activeTextLayer.scene && activeTextLayer.scene.id !== id) {
     clearTextSelection();
   }
+  if (activeChoice) {
+    const sceneHasChoice = scenes
+      .find((s) => s.id === id)
+      ?.choices.some((c) => c.id === activeChoice.choice.id);
+    if (!sceneHasChoice) clearChoiceSelection();
+  }
   updateSceneList();
   renderInspector();
 }
 
 function renderInspector() {
   const scene = scenes.find((s) => s.id === selectedSceneId);
+  if (activeChoice) {
+    const { choice } = activeChoice;
+    inspectorContent.innerHTML = '';
+    const title = document.createElement('h3');
+    title.textContent = 'Кнопка вибору';
+    inspectorContent.appendChild(title);
+
+    inspectorContent.appendChild(buildLabeledInput('Текст кнопки', choice.text, (value) => {
+      choice.text = value;
+      renderScene(scene);
+      refreshConnections();
+      saveState();
+    }));
+
+    inspectorContent.appendChild(buildLabeledSelect('Цільова сцена', choice.target, (value) => {
+      choice.target = value || null;
+      refreshConnections();
+      saveState();
+    }));
+
+    inspectorContent.appendChild(buildLabeledInput('Група', choice.group, (value) => {
+      choice.group = value;
+      saveState();
+    }));
+
+    inspectorContent.appendChild(buildLabeledInput('Колір фону', choice.background, (value) => {
+      choice.background = value;
+      renderScene(scene);
+      saveState();
+    }, 'color'));
+
+    inspectorContent.appendChild(buildLabeledInput('Колір тексту', choice.color, (value) => {
+      choice.color = value;
+      renderScene(scene);
+      saveState();
+    }, 'color'));
+
+    inspectorContent.appendChild(buildLabeledInput('Розмір шрифту', choice.fontSize, (value) => {
+      choice.fontSize = Number(value) || 16;
+      renderScene(scene);
+      saveState();
+    }, 'number'));
+
+    const boldWrapper = document.createElement('div');
+    const boldLabel = document.createElement('label');
+    boldLabel.textContent = 'Жирний текст';
+    const boldCheckbox = document.createElement('input');
+    boldCheckbox.type = 'checkbox';
+    boldCheckbox.checked = choice.bold;
+    boldCheckbox.onchange = (e) => {
+      choice.bold = e.target.checked;
+      renderScene(scene);
+      saveState();
+    };
+    boldWrapper.append(boldLabel, boldCheckbox);
+    inspectorContent.appendChild(boldWrapper);
+
+    inspectorContent.appendChild(buildLabeledInput('Округлення кутів (px)', choice.borderRadius, (value) => {
+      choice.borderRadius = Number(value) || 0;
+      renderScene(scene);
+      saveState();
+    }, 'number'));
+
+    inspectorContent.appendChild(buildLabeledInput('Ширина кнопки (px)', choice.width, (value) => {
+      choice.width = Math.max(60, Number(value) || 120);
+      renderScene(scene);
+      saveState();
+    }, 'number'));
+
+    inspectorContent.appendChild(buildLabeledInput('Висота кнопки (px)', choice.height, (value) => {
+      choice.height = Math.max(32, Number(value) || 40);
+      renderScene(scene);
+      saveState();
+    }, 'number'));
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = 'Видалити кнопку вибору';
+    deleteBtn.style.background = '#fee2e2';
+    deleteBtn.style.color = '#b91c1c';
+    deleteBtn.onclick = () => {
+      const parentScene = scenes.find((s) => s.choices.some((c) => c.id === choice.id));
+      if (parentScene) {
+        parentScene.choices = parentScene.choices.filter((c) => c.id !== choice.id);
+        activeChoice = null;
+        renderScene(parentScene);
+        refreshConnections();
+        saveState();
+        renderInspector();
+      }
+    };
+    inspectorContent.appendChild(deleteBtn);
+    return;
+  }
+
   if (!scene) {
     inspectorContent.innerHTML = '<p class="empty-state">Оберіть сцену, щоб побачити налаштування.</p>';
     return;
@@ -608,48 +817,66 @@ function renderInspector() {
   inspectorContent.appendChild(deleteBtn);
 }
 
-function buildLabeledInput(label, value, onChange) {
+function buildLabeledInput(label, value, onChange, type = 'text') {
   const wrapper = document.createElement('div');
   const lbl = document.createElement('label');
   lbl.textContent = label;
   const input = document.createElement('input');
-  input.value = value || '';
+  input.type = type;
+  input.value = value ?? '';
   input.oninput = (e) => onChange(e.target.value);
   wrapper.append(lbl, input);
   return wrapper;
 }
 
+function buildLabeledSelect(label, value, onChange) {
+  const wrapper = document.createElement('div');
+  const lbl = document.createElement('label');
+  lbl.textContent = label;
+  const select = document.createElement('select');
+  populateTargetSelect(select, value);
+  select.onchange = (e) => onChange(e.target.value);
+  wrapper.append(lbl, select);
+  return wrapper;
+}
+
 function renderChoices(scene, container) {
   container.innerHTML = '';
-  const tmpl = document.getElementById('choice-template');
   scene.choices.forEach((choice) => {
-    const clone = tmpl.content.cloneNode(true);
-    const choiceEl = clone.querySelector('.choice-item');
-    const textSpan = choiceEl.querySelector('span');
-    const select = choiceEl.querySelector('.choice-target');
-    const removeBtn = choiceEl.querySelector('.remove-choice');
+    ensureChoiceDefaults(choice);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'choice-card';
+    wrapper.style.width = `${choice.width}px`;
+    wrapper.style.height = `${choice.height}px`;
+    wrapper.style.transform = `translate(${choice.x}px, ${choice.y}px)`;
+    wrapper.dataset.choiceId = choice.id;
 
-    textSpan.textContent = choice.text;
-    textSpan.oninput = (e) => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-button';
+    btn.contentEditable = 'true';
+    btn.textContent = choice.text;
+    btn.style.width = '100%';
+    btn.style.height = '100%';
+    btn.style.background = choice.background;
+    btn.style.color = choice.color;
+    btn.style.fontWeight = choice.bold ? '700' : '500';
+    btn.style.fontSize = `${choice.fontSize}px`;
+    btn.style.borderRadius = `${choice.borderRadius}px`;
+
+    btn.oninput = (e) => {
       choice.text = e.target.textContent;
       saveState();
     };
 
-    populateTargetSelect(select, choice.target);
-    select.onchange = (e) => {
-      choice.target = e.target.value || null;
-      refreshConnections();
-      saveState();
+    btn.onclick = (event) => {
+      event.stopPropagation();
+      selectScene(scene.id);
+      selectChoice(choice, btn);
     };
 
-    removeBtn.onclick = () => {
-      scene.choices = scene.choices.filter((c) => c.id !== choice.id);
-      renderScene(scene);
-      refreshConnections();
-      saveState();
-    };
-
-    container.appendChild(choiceEl);
+    wrapper.appendChild(btn);
+    container.appendChild(wrapper);
+    enableChoiceInteraction(wrapper, choice, scene);
   });
 }
 
@@ -676,7 +903,6 @@ function refreshConnections() {
   scenes.forEach((scene) => {
     const fromEl = document.querySelector(`[data-id="${scene.id}"]`);
     if (!fromEl) return;
-    const fromRect = fromEl.getBoundingClientRect();
     const canvasRect = canvas.getBoundingClientRect();
     scene.choices.forEach((choice) => {
       if (!choice.target) return;
@@ -684,10 +910,13 @@ function refreshConnections() {
       if (!targetScene) return;
       const targetEl = document.querySelector(`[data-id="${targetScene.id}"]`);
       if (!targetEl) return;
+      const choiceEl = fromEl.querySelector(`[data-choice-id="${choice.id}"]`);
       const targetRect = targetEl.getBoundingClientRect();
+      const choiceRect = choiceEl?.getBoundingClientRect();
+      if (!choiceRect) return;
 
-      const x1 = fromRect.left - canvasRect.left + fromRect.width / 2;
-      const y1 = fromRect.top - canvasRect.top + fromRect.height;
+      const x1 = choiceRect.left - canvasRect.left + choiceRect.width / 2;
+      const y1 = choiceRect.top - canvasRect.top + choiceRect.height / 2;
       const x2 = targetRect.left - canvasRect.left + targetRect.width / 2;
       const y2 = targetRect.top - canvasRect.top;
 
@@ -800,6 +1029,14 @@ function downloadFile(filename, content, type) {
 function bootstrap() {
   addSceneBtn.onclick = createScene;
   addTextBlockBtn.onclick = addLooseTextLayer;
+  addChoiceButton.onclick = () => {
+    const scene = scenes.find((s) => s.id === selectedSceneId) || scenes[0];
+    if (!scene) return;
+    createChoiceButton(scene);
+    renderScene(scene);
+    refreshConnections();
+    saveState();
+  };
   insertImageBtn.onclick = () => imageFileInput.click();
   imageFileInput.onchange = () => {
     const [file] = imageFileInput.files || [];
@@ -820,6 +1057,7 @@ function bootstrap() {
   canvas.onclick = () => {
     selectScene(null);
     clearTextSelection();
+    clearChoiceSelection();
   };
   canvas.addEventListener('dragover', (event) => {
     const items = event.dataTransfer?.items;

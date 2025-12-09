@@ -235,6 +235,36 @@ body {
   padding: 4px;
 }
 
+.choice-card {
+  position: relative;
+}
+
+.choice-button {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 10px;
+  cursor: move;
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 600;
+  min-width: 120px;
+  min-height: 42px;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.25);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.choice-button:focus {
+  outline: 2px solid #a5b4fc;
+}
+
+.choice-button.selected {
+  box-shadow: 0 10px 30px rgba(59, 130, 246, 0.35);
+  transform: translateZ(0) scale(1.01);
+}
+
 .choice-item span {
   flex: 1;
   padding: 4px 6px;
