@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Novella Studio</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="logo">Novella Studio</div>
+    <div class="controls">
+      <button id="add-scene">+ Додати сцену</button>
+      <button id="export-json">Експорт JSON</button>
+      <button id="export-html">Експорт HTML</button>
+    </div>
+  </header>
+  <main class="app-main">
+    <section class="sidebar">
+      <h2>Сцени</h2>
+      <ul id="scene-list" class="scene-list"></ul>
+    </section>
+    <section class="workspace">
+      <div id="canvas-wrapper">
+        <svg id="connections" class="connections" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div id="canvas" class="canvas"></div>
+      </div>
+    </section>
+    <section class="inspector">
+      <h2>Редактор</h2>
+      <div id="inspector-content" class="inspector-content"></div>
+    </section>
+  </main>
+  <template id="scene-template">
+    <div class="scene-frame" data-id="">
+      <div class="scene-header">
+        <input class="scene-title" placeholder="Назва сцени" />
+      </div>
+      <div class="scene-body" contenteditable="true">Подвійний клік для редагування тексту…</div>
+      <div class="scene-actions">
+        <button class="add-choice">+ Вибір</button>
+        <button class="add-text">+ Текст</button>
+        <button class="add-image">+ Зображення</button>
+      </div>
+      <div class="scene-choices"></div>
+    </div>
+  </template>
+  <template id="choice-template">
+    <div class="choice-item">
+      <span contenteditable="true">Новий вибір</span>
+      <select class="choice-target"></select>
+      <button class="remove-choice" title="Видалити">×</button>
+    </div>
+  </template>
+  <template id="text-layer-template">
+    <div class="layer text-layer" contenteditable="true">Новий текст</div>
+  </template>
+  <template id="image-layer-template">
+    <div class="layer image-layer">
+      <input type="text" placeholder="URL зображення" class="image-url" />
+      <button class="apply-image">Застосувати</button>
+    </div>
+  </template>
+  <script src="script.js"></script>
+</body>
+</html>

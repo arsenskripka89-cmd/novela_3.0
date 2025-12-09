@@ -1,0 +1,260 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #111827;
+  background: #f5f7fb;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #0f172a;
+  color: #e5e7eb;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.logo {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.controls button {
+  margin-left: 8px;
+  padding: 8px 12px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.controls button:hover {
+  background: #2563eb;
+}
+
+.app-main {
+  display: grid;
+  grid-template-columns: 240px 1fr 320px;
+  height: calc(100vh - 56px);
+}
+
+.sidebar,
+.inspector {
+  padding: 12px;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  overflow-y: auto;
+}
+
+.inspector {
+  border-right: none;
+  border-left: 1px solid #e5e7eb;
+}
+
+.sidebar h2,
+.inspector h2 {
+  margin-top: 0;
+}
+
+.scene-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.scene-list li {
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.scene-list li.active {
+  border-color: #3b82f6;
+  background: #e0f2fe;
+}
+
+.workspace {
+  position: relative;
+  background: #f8fafc;
+}
+
+#canvas-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  background-image: linear-gradient(90deg, #e5e7eb 1px, transparent 1px),
+    linear-gradient(#e5e7eb 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.connections {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.scene-frame {
+  position: absolute;
+  width: 260px;
+  min-height: 220px;
+  padding: 10px;
+  background: #ffffff;
+  border: 2px solid #cbd5e1;
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scene-frame.selected {
+  border-color: #2563eb;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.25);
+}
+
+.scene-header input {
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 6px;
+  font-weight: 600;
+}
+
+.scene-body {
+  min-height: 80px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  padding: 8px;
+  background: #f8fafc;
+}
+
+.scene-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.scene-actions button {
+  flex: 1;
+  border: none;
+  background: #e0f2fe;
+  color: #0f172a;
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.scene-actions button:hover {
+  background: #bae6fd;
+}
+
+.scene-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.choice-item {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 4px;
+}
+
+.choice-item span {
+  flex: 1;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: white;
+}
+
+.choice-item select {
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.remove-choice {
+  border: none;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+
+.layer {
+  position: absolute;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  cursor: move;
+}
+
+.text-layer {
+  min-width: 80px;
+  min-height: 32px;
+}
+
+.image-layer input {
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 4px;
+}
+
+.image-layer img {
+  max-width: 200px;
+  display: block;
+  border-radius: 6px;
+}
+
+.inspector-content label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.inspector-content input,
+.inspector-content textarea,
+.inspector-content select {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.empty-state {
+  color: #6b7280;
+}
+
+.export-output {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 12px;
+  background: #0f172a;
+  color: #e5e7eb;
+  padding: 8px;
+  border-radius: 8px;
+  overflow: auto;
+  max-height: 200px;
+}
