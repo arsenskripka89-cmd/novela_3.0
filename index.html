@@ -15,6 +15,7 @@
     <div class="logo">Novella Studio</div>
     <div class="controls">
       <button id="add-scene">+ Додати сцену</button>
+      <button id="add-text-block">+ Додати текст</button>
       <button id="insert-image">Вставити зображення</button>
       <button id="export-json">Експорт JSON</button>
       <button id="export-html">Експорт HTML</button>
@@ -30,6 +31,26 @@
       <div id="canvas-wrapper">
         <svg id="connections" class="connections" xmlns="http://www.w3.org/2000/svg"></svg>
         <div id="canvas" class="canvas"></div>
+        <div id="text-toolbar" class="text-toolbar">
+          <select id="font-family">
+            <option value="Inter">Inter</option>
+            <option value="Arial">Arial</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Times New Roman">Times New Roman</option>
+            <option value="Courier New">Courier New</option>
+          </select>
+          <input id="font-size" type="number" min="8" max="96" value="16" />
+          <input id="font-color" type="color" value="#0f172a" />
+          <div class="toolbar-actions">
+            <button id="btn-bold" type="button" title="Жирний">B</button>
+            <button id="btn-italic" type="button" title="Курсив">I</button>
+            <button id="btn-underline" type="button" title="Підкреслення">U</button>
+          </div>
+          <div class="toolbar-actions">
+            <button id="btn-forward" type="button" title="Перемістити вперед">▲</button>
+            <button id="btn-backward" type="button" title="Перемістити назад">▼</button>
+          </div>
+        </div>
       </div>
     </section>
     <section class="inspector">

@@ -2,15 +2,27 @@ const canvas = document.getElementById('canvas');
 const sceneList = document.getElementById('scene-list');
 const addSceneBtn = document.getElementById('add-scene');
 const insertImageBtn = document.getElementById('insert-image');
+const addTextBlockBtn = document.getElementById('add-text-block');
 const inspectorContent = document.getElementById('inspector-content');
 const connectionsSvg = document.getElementById('connections');
 const exportJsonBtn = document.getElementById('export-json');
 const exportHtmlBtn = document.getElementById('export-html');
 const imageFileInput = document.getElementById('image-file-input');
+const textToolbar = document.getElementById('text-toolbar');
+const fontFamilySelect = document.getElementById('font-family');
+const fontSizeInput = document.getElementById('font-size');
+const fontColorInput = document.getElementById('font-color');
+const boldBtn = document.getElementById('btn-bold');
+const italicBtn = document.getElementById('btn-italic');
+const underlineBtn = document.getElementById('btn-underline');
+const forwardBtn = document.getElementById('btn-forward');
+const backwardBtn = document.getElementById('btn-backward');
 
 let scenes = [];
 let selectedSceneId = null;
 let looseImages = [];
+let looseTextLayers = [];
+let activeTextLayer = null;
 
 const DEFAULT_IMAGE_SIZE = 220;
 
@@ -21,7 +33,7 @@ function uid() {
 }
 
 function saveState() {
-  localStorage.setItem(storageKey, JSON.stringify({ scenes, looseImages }));
+  localStorage.setItem(storageKey, JSON.stringify({ scenes, looseImages, looseTextLayers }));
 }
 
 function loadState() {
@@ -31,12 +43,15 @@ function loadState() {
     if (Array.isArray(parsed)) {
       scenes = parsed;
       looseImages = [];
+      looseTextLayers = [];
     } else {
       scenes = parsed.scenes || [];
       looseImages = parsed.looseImages || [];
+      looseTextLayers = parsed.looseTextLayers || [];
     }
     scenes.forEach(renderScene);
     renderLooseImages();
+    renderLooseText();
     updateSceneList();
     refreshConnections();
   }
@@ -82,6 +97,60 @@ function renderLooseImages() {
   looseImages.forEach(createLooseImageElement);
 }
 
+function createLooseTextElement(layer) {
+  ensureTextDefaults(layer);
+  const el = document.createElement('div');
+  el.className = 'layer text-layer loose-text';
+  el.contentEditable = 'true';
+  el.dataset.layerId = layer.id;
+  applyTextStyleToElement(el, layer);
+  el.innerHTML = layer.content;
+  el.style.left = `${layer.x}px`;
+  el.style.top = `${layer.y}px`;
+  el.style.width = `${layer.width}px`;
+  el.style.height = `${layer.height}px`;
+  canvas.appendChild(el);
+  el.oninput = () => {
+    layer.content = el.innerHTML;
+    saveState();
+  };
+  el.onclick = (event) => {
+    event.stopPropagation();
+    selectTextLayer(layer, el, null);
+  };
+  enableLayerDrag(el, layer);
+}
+
+function renderLooseText() {
+  document.querySelectorAll('.loose-text').forEach((el) => el.remove());
+  looseTextLayers.forEach(createLooseTextElement);
+}
+
+function addLooseTextLayer() {
+  const canvasRect = canvas.getBoundingClientRect();
+  const layer = {
+    id: uid(),
+    type: 'text',
+    content: 'Новий текст',
+    x: canvasRect.width / 2 - 80,
+    y: canvasRect.height / 2 - 20,
+    width: 160,
+    height: 50,
+    fontFamily: 'Inter',
+    fontSize: 16,
+    color: '#0f172a',
+    bold: false,
+    italic: false,
+    underline: false,
+    zIndex: 1,
+  };
+  looseTextLayers.push(layer);
+  renderLooseText();
+  const created = document.querySelector(`.loose-text[data-layer-id="${layer.id}"]`);
+  if (created) selectTextLayer(layer, created, null);
+  saveState();
+}
+
 function addImageLayer(src, naturalWidth, naturalHeight, sceneId = null, dropPosition = null) {
   const scene = sceneId ? scenes.find((s) => s.id === sceneId) : scenes.find((s) => s.id === selectedSceneId);
   if (scene) {
@@ -114,6 +183,7 @@ function addImageLayer(src, naturalWidth, naturalHeight, sceneId = null, dropPos
     height: targetSize.height,
   });
   renderLooseImages();
+  renderLooseText();
   saveState();
 }
 
@@ -194,8 +264,30 @@ function renderScene(scene) {
     textLayer.style.left = '20px';
     textLayer.style.top = '150px';
     el.appendChild(textLayer);
-    scene.layers.push({ id: uid(), type: 'text', content: 'Новий текст', x: 20, y: 150, width: 120, height: 40 });
+    const layerState = {
+      id: uid(),
+      type: 'text',
+      content: 'Новий текст',
+      x: 20,
+      y: 150,
+      width: 160,
+      height: 50,
+      fontFamily: 'Inter',
+      fontSize: 16,
+      color: '#0f172a',
+      bold: false,
+      italic: false,
+      underline: false,
+      zIndex: scene.layers.length + 1,
+    };
+    scene.layers.push(layerState);
+    applyTextStyleToElement(textLayer, layerState);
+    textLayer.onclick = (event) => {
+      event.stopPropagation();
+      selectTextLayer(layerState, textLayer, scene);
+    };
     enableLayerDrag(textLayer, scene.layers.at(-1));
+    selectTextLayer(layerState, textLayer, scene);
     saveState();
   };
 
@@ -233,13 +325,20 @@ function renderLayers(scene, frameEl) {
   scene.layers.forEach((layer) => {
     let layerEl;
     if (layer.type === 'text') {
+      ensureTextDefaults(layer);
       layerEl = document.createElement('div');
       layerEl.className = 'layer text-layer';
       layerEl.contentEditable = 'true';
+      layerEl.dataset.layerId = layer.id;
+      applyTextStyleToElement(layerEl, layer);
       layerEl.innerHTML = layer.content;
       layerEl.oninput = () => {
         layer.content = layerEl.innerHTML;
         saveState();
+      };
+      layerEl.onclick = (event) => {
+        event.stopPropagation();
+        selectTextLayer(layer, layerEl, scene);
       };
     } else if (layer.type === 'image') {
       layerEl = document.createElement('div');
@@ -260,11 +359,80 @@ function renderLayers(scene, frameEl) {
   });
 }
 
+function applyTextStyleToElement(el, layer) {
+  el.style.fontFamily = layer.fontFamily || 'Inter';
+  el.style.fontSize = `${layer.fontSize || 16}px`;
+  el.style.color = layer.color || '#0f172a';
+  el.style.fontWeight = layer.bold ? '700' : '400';
+  el.style.fontStyle = layer.italic ? 'italic' : 'normal';
+  el.style.textDecoration = layer.underline ? 'underline' : 'none';
+  el.style.zIndex = layer.zIndex || 1;
+}
+
+function ensureTextDefaults(layer) {
+  layer.fontFamily = layer.fontFamily || 'Inter';
+  layer.fontSize = layer.fontSize || 16;
+  layer.color = layer.color || '#0f172a';
+  layer.bold = !!layer.bold;
+  layer.italic = !!layer.italic;
+  layer.underline = !!layer.underline;
+  layer.zIndex = layer.zIndex || 1;
+}
+
+function selectTextLayer(layer, element, scene) {
+  activeTextLayer = { layer, element, scene };
+  textToolbar.classList.add('active');
+  syncToolbarWithLayer(layer);
+}
+
+function clearTextSelection() {
+  activeTextLayer = null;
+  textToolbar.classList.remove('active');
+}
+
+function syncToolbarWithLayer(layer) {
+  fontFamilySelect.value = layer.fontFamily || 'Inter';
+  fontSizeInput.value = layer.fontSize || 16;
+  fontColorInput.value = layer.color || '#0f172a';
+  boldBtn.classList.toggle('active', !!layer.bold);
+  italicBtn.classList.toggle('active', !!layer.italic);
+  underlineBtn.classList.toggle('active', !!layer.underline);
+}
+
+function updateLayerStyleFromToolbar() {
+  if (!activeTextLayer) return;
+  const { layer, element } = activeTextLayer;
+  layer.fontFamily = fontFamilySelect.value;
+  layer.fontSize = Number(fontSizeInput.value) || 16;
+  layer.color = fontColorInput.value;
+  layer.bold = boldBtn.classList.contains('active');
+  layer.italic = italicBtn.classList.contains('active');
+  layer.underline = underlineBtn.classList.contains('active');
+  applyTextStyleToElement(element, layer);
+  saveState();
+}
+
+function adjustZIndex(delta) {
+  if (!activeTextLayer) return;
+  const { layer, element, scene } = activeTextLayer;
+  layer.zIndex = Math.max(1, (layer.zIndex || 1) + delta);
+  element.style.zIndex = layer.zIndex;
+  if (scene) {
+    scene.layers = scene.layers.sort((a, b) => (a.zIndex || 1) - (b.zIndex || 1));
+  }
+  saveState();
+}
+
 function enableLayerDrag(el, layer) {
   interact(el)
     .draggable({
       modifiers: [interact.modifiers.restrictRect({ restriction: 'parent', endOnly: true })],
       listeners: {
+        start() {
+          if (layer.type === 'text') {
+            selectTextLayer(layer, el, findSceneByLayer(layer));
+          }
+        },
         move(event) {
           const x = (parseFloat(el.dataset.x) || layer.x || 0) + event.dx;
           const y = (parseFloat(el.dataset.y) || layer.y || 0) + event.dy;
@@ -380,6 +548,10 @@ function enableFrameInteraction(el, scene) {
     });
 }
 
+function findSceneByLayer(layer) {
+  return scenes.find((scene) => scene.layers.some((l) => l.id === layer.id)) || null;
+}
+
 function updateSceneList() {
   sceneList.innerHTML = '';
   scenes.forEach((scene) => {
@@ -398,6 +570,9 @@ function selectScene(id) {
   document.querySelectorAll('.scene-frame').forEach((el) => {
     el.classList.toggle('selected', el.dataset.id === id);
   });
+  if (activeTextLayer && activeTextLayer.scene && activeTextLayer.scene.id !== id) {
+    clearTextSelection();
+  }
   updateSceneList();
   renderInspector();
 }
@@ -624,6 +799,7 @@ function downloadFile(filename, content, type) {
 
 function bootstrap() {
   addSceneBtn.onclick = createScene;
+  addTextBlockBtn.onclick = addLooseTextLayer;
   insertImageBtn.onclick = () => imageFileInput.click();
   imageFileInput.onchange = () => {
     const [file] = imageFileInput.files || [];
@@ -641,7 +817,10 @@ function bootstrap() {
   };
   exportJsonBtn.onclick = exportJSON;
   exportHtmlBtn.onclick = exportHTML;
-  canvas.onclick = () => selectScene(null);
+  canvas.onclick = () => {
+    selectScene(null);
+    clearTextSelection();
+  };
   canvas.addEventListener('dragover', (event) => {
     const items = event.dataTransfer?.items;
     if (items && [...items].some((item) => item.type.startsWith('image/'))) {
@@ -660,6 +839,25 @@ function bootstrap() {
     const sceneTarget = event.target.closest('.scene-frame');
     placeImageFromFile(file, dropPosition, sceneTarget?.dataset.id || null);
   });
+
+  fontFamilySelect.onchange = updateLayerStyleFromToolbar;
+  fontSizeInput.onchange = updateLayerStyleFromToolbar;
+  fontColorInput.oninput = updateLayerStyleFromToolbar;
+  boldBtn.onclick = () => {
+    boldBtn.classList.toggle('active');
+    updateLayerStyleFromToolbar();
+  };
+  italicBtn.onclick = () => {
+    italicBtn.classList.toggle('active');
+    updateLayerStyleFromToolbar();
+  };
+  underlineBtn.onclick = () => {
+    underlineBtn.classList.toggle('active');
+    updateLayerStyleFromToolbar();
+  };
+  forwardBtn.onclick = () => adjustZIndex(1);
+  backwardBtn.onclick = () => adjustZIndex(-1);
+
   loadState();
   if (scenes.length === 0) createScene();
 }
