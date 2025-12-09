@@ -1,13 +1,18 @@
 const canvas = document.getElementById('canvas');
 const sceneList = document.getElementById('scene-list');
 const addSceneBtn = document.getElementById('add-scene');
+const insertImageBtn = document.getElementById('insert-image');
 const inspectorContent = document.getElementById('inspector-content');
 const connectionsSvg = document.getElementById('connections');
 const exportJsonBtn = document.getElementById('export-json');
 const exportHtmlBtn = document.getElementById('export-html');
+const imageFileInput = document.getElementById('image-file-input');
 
 let scenes = [];
 let selectedSceneId = null;
+let looseImages = [];
+
+const DEFAULT_IMAGE_SIZE = 220;
 
 const storageKey = 'novella-scenes';
 
@@ -16,17 +21,111 @@ function uid() {
 }
 
 function saveState() {
-  localStorage.setItem(storageKey, JSON.stringify(scenes));
+  localStorage.setItem(storageKey, JSON.stringify({ scenes, looseImages }));
 }
 
 function loadState() {
   const stored = localStorage.getItem(storageKey);
   if (stored) {
-    scenes = JSON.parse(stored);
+    const parsed = JSON.parse(stored);
+    if (Array.isArray(parsed)) {
+      scenes = parsed;
+      looseImages = [];
+    } else {
+      scenes = parsed.scenes || [];
+      looseImages = parsed.looseImages || [];
+    }
     scenes.forEach(renderScene);
+    renderLooseImages();
     updateSceneList();
     refreshConnections();
   }
+}
+
+function fitImageSize(width, height, maxWidth, maxHeight) {
+  const ratio = Math.min(maxWidth / width, maxHeight / height, 1);
+  return { width: Math.round(width * ratio), height: Math.round(height * ratio) };
+}
+
+function imagePlacementPosition(scene, dropPosition) {
+  if (scene) {
+    const frame = document.querySelector(`[data-id="${scene.id}"]`);
+    if (frame && dropPosition) {
+      const frameRect = frame.getBoundingClientRect();
+      const canvasRect = canvas.getBoundingClientRect();
+      return {
+        x: dropPosition.x - (frameRect.left - canvasRect.left),
+        y: dropPosition.y - (frameRect.top - canvasRect.top),
+      };
+    }
+    return { x: scene.width / 2, y: scene.height / 2 };
+  }
+  const canvasRect = canvas.getBoundingClientRect();
+  if (dropPosition) return dropPosition;
+  return { x: canvasRect.width / 2, y: canvasRect.height / 2 };
+}
+
+function createLooseImageElement(layer) {
+  const el = document.createElement('div');
+  el.className = 'layer image-layer loose-image';
+  el.style.left = `${layer.x}px`;
+  el.style.top = `${layer.y}px`;
+  el.style.width = `${layer.width}px`;
+  el.style.height = `${layer.height}px`;
+  el.innerHTML = `<img src="${layer.src}" alt="Зображення" />`;
+  canvas.appendChild(el);
+  enableLayerDrag(el, layer);
+}
+
+function renderLooseImages() {
+  document.querySelectorAll('.loose-image').forEach((el) => el.remove());
+  looseImages.forEach(createLooseImageElement);
+}
+
+function addImageLayer(src, naturalWidth, naturalHeight, sceneId = null, dropPosition = null) {
+  const scene = sceneId ? scenes.find((s) => s.id === sceneId) : scenes.find((s) => s.id === selectedSceneId);
+  if (scene) {
+    const targetSize = fitImageSize(naturalWidth, naturalHeight, scene.width - 40, scene.height - 60);
+    const { x, y } = imagePlacementPosition(scene, dropPosition);
+    const layerState = {
+      id: uid(),
+      type: 'image',
+      src,
+      x: Math.max(0, x - targetSize.width / 2),
+      y: Math.max(0, y - targetSize.height / 2),
+      width: targetSize.width,
+      height: targetSize.height,
+    };
+    scene.layers.push(layerState);
+    renderScene(scene);
+    saveState();
+    return;
+  }
+
+  const canvasRect = canvas.getBoundingClientRect();
+  const targetSize = fitImageSize(naturalWidth, naturalHeight, DEFAULT_IMAGE_SIZE, DEFAULT_IMAGE_SIZE);
+  const { x, y } = imagePlacementPosition(null, dropPosition);
+  looseImages.push({
+    id: uid(),
+    src,
+    x: Math.min(Math.max(0, x - targetSize.width / 2), canvasRect.width - targetSize.width),
+    y: Math.min(Math.max(0, y - targetSize.height / 2), canvasRect.height - targetSize.height),
+    width: targetSize.width,
+    height: targetSize.height,
+  });
+  renderLooseImages();
+  saveState();
+}
+
+function placeImageFromFile(file, dropPosition, sceneId = null) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const src = e.target.result;
+    const img = new Image();
+    img.onload = () => addImageLayer(src, img.naturalWidth, img.naturalHeight, sceneId, dropPosition);
+    img.src = src;
+  };
+  reader.readAsDataURL(file);
 }
 
 function createScene() {
@@ -463,12 +562,12 @@ function deleteScene(id) {
 }
 
 function exportJSON() {
-  const dataStr = JSON.stringify({ scenes }, null, 2);
+  const dataStr = JSON.stringify({ scenes, looseImages }, null, 2);
   downloadFile('project.json', dataStr, 'application/json');
 }
 
 function exportHTML() {
-  const project = { scenes };
+  const project = { scenes, looseImages };
   const html = `<!DOCTYPE html>
 <html lang="uk">
 <head>
@@ -525,9 +624,42 @@ function downloadFile(filename, content, type) {
 
 function bootstrap() {
   addSceneBtn.onclick = createScene;
+  insertImageBtn.onclick = () => imageFileInput.click();
+  imageFileInput.onchange = () => {
+    const [file] = imageFileInput.files || [];
+    if (file && file.type.startsWith('image/')) {
+      const dropX = parseFloat(imageFileInput.dataset.dropX);
+      const dropY = parseFloat(imageFileInput.dataset.dropY);
+      const sceneId = imageFileInput.dataset.sceneId || null;
+      const position = Number.isFinite(dropX) && Number.isFinite(dropY) ? { x: dropX, y: dropY } : null;
+      placeImageFromFile(file, position, sceneId);
+    }
+    imageFileInput.value = '';
+    delete imageFileInput.dataset.dropX;
+    delete imageFileInput.dataset.dropY;
+    delete imageFileInput.dataset.sceneId;
+  };
   exportJsonBtn.onclick = exportJSON;
   exportHtmlBtn.onclick = exportHTML;
   canvas.onclick = () => selectScene(null);
+  canvas.addEventListener('dragover', (event) => {
+    const items = event.dataTransfer?.items;
+    if (items && [...items].some((item) => item.type.startsWith('image/'))) {
+      event.preventDefault();
+      canvas.classList.add('dragover');
+    }
+  });
+  canvas.addEventListener('dragleave', () => canvas.classList.remove('dragover'));
+  canvas.addEventListener('drop', (event) => {
+    event.preventDefault();
+    canvas.classList.remove('dragover');
+    const file = [...event.dataTransfer.files].find((f) => f.type.startsWith('image/'));
+    if (!file) return;
+    const canvasRect = canvas.getBoundingClientRect();
+    const dropPosition = { x: event.clientX - canvasRect.left, y: event.clientY - canvasRect.top };
+    const sceneTarget = event.target.closest('.scene-frame');
+    placeImageFromFile(file, dropPosition, sceneTarget?.dataset.id || null);
+  });
   loadState();
   if (scenes.length === 0) createScene();
 }
